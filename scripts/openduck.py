@@ -214,6 +214,20 @@ def args_sanitation(parser, modes):
             # all good
             pass
         pass
+    elif args.mode == 'prepare-cofactor':
+        if (args.yaml_input is None) and (args.mol2 is None or args.frcmod is None or args.output is None):
+            modes.choices['chunk'].error('The input needs to be either the input yaml or specified on the command line (mol2, frcmod, outputfile).')
+        elif args.yaml_input:
+            input_arguments = yaml.load(open(args.yaml_input), Loader=yaml.FullLoader)
+            if all(item in list(input_arguments.keys()) for item in ['mol2', 'frcmod', 'output']):
+                args.mol2 = str(input_arguments['mol2'])
+                args.frcmod = str(input_arguments['frcmod'])
+                args.output = str(input_arguments['output'])
+            else:
+                modes.choices['chunk'].error('You need to specify at least "mol2, "frcmod" and "output" in the yaml file.')
+        else:
+            # all good
+            pass
     return args
 
 def parse_input():
@@ -372,6 +386,14 @@ def parse_input():
     chunk.add_argument('-b', '--ignore-buffers', action='store_true', help='Do not remove buffers (solvent, ions etc.)')
     chunk.add_argument('-o', '--output', type=str, default='protein_out.pdb',help='Output format for the chunked protein receptor.')
     chunk.add_argument('--keep-all-files', default=False, action='store_true', help='Disable cleaning up intermediate files during preparation.')
+
+    #Arguments for cofactor parameters preparation
+    cofactor = modes.add_parser('prepare-cofactor', help='Create the parameters file for a cofactor to input as custom forcefield.', description='To perform simulations with cofactors new non-standard parameters need to be provided. OpenMM accepts parameters in xml format, where charges and forcefield parameters are stored, however Amber stores charges and parameters separatedly. This is a helper program to create an xml parameters file.')
+    cofactor.set_defaults(mode='prepare-cofactor')
+    cofactor.add_argument('-y', '--yaml-input', type=str, default=None, help='Input yaml file with all the arguments for the cofactor parameter file preparation.')
+    cofactor.add_argument('-m', '--mol2',type=str, default=None, help='Mol2 with the partial charges of the cofactor')
+    cofactor.add_argument('-f', '--frcmod',type=str, default=None, help='frcmod of the complete set of parameters for your molecule. Reminder: use the -a Y flag in parmchk2.')
+    cofactor.add_argument('-o', '--output',type=str, default=None, help='Output parameters file in xml format.')
 
     args = args_sanitation(parser, modes)
 
@@ -802,6 +824,9 @@ def main():
     elif args.mode == 'Chunk':
         from duck.steps.chunk import duck_chunk
         duck_chunk(args.receptor,args.ligand,args.interaction,args.cutoff,output_name=args.output, ignore_buffers=args.ignore_buffers, keep_all_files=args.keep_all_files)
+    elif args.mode == 'prepare-cofactor':
+        from duck.utils.frcmod_mol2_to_xml import frcmod_mol2_to_xml
+        frcmod_mol2_to_xml(frcmod = args.frcmod, mol2 = args.mol2, out_xml= args.output)
     else:
         parser.print_help()
 if __name__ == '__main__':
