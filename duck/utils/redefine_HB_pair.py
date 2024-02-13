@@ -43,6 +43,7 @@ def find_interacting_atoms(ref, ligand, allowed_elements = [7,8], distance_thres
                         break
             else:
                 r.append((atom, dist))
+    if len(r) == 0: raise ValueError('No atom fits the interacting criteria.')
     return r
 def modify_DUck_HB_atom_ids(prot_atom, lig_atom, files_to_mod = ['dist_duck.rst', 'dist_md.rst'], backup=True):
     new_prot_idx = str(int(prot_atom.idx)+1)
@@ -52,6 +53,7 @@ def modify_DUck_HB_atom_ids(prot_atom, lig_atom, files_to_mod = ['dist_duck.rst'
             shutil.copyfile(file, f"{file}.BAK")
         with FileInput(files=file, inplace=True) as f:
             for line in f:
+                line = line.rstrip()
                 if 'iat' in line:
                     line_parts = line.split()
                     mod_parts = []
@@ -60,6 +62,7 @@ def modify_DUck_HB_atom_ids(prot_atom, lig_atom, files_to_mod = ['dist_duck.rst'
                             part = f'iat={new_prot_idx},{new_lig_idx},'
                         mod_parts.append(part)
                     print(' '.join(mod_parts))
+                else: print(line)
                     
 def find_and_modify_HB_interaction(system_pmd, interaction, ligand_name, distance_threshold=3.5, pocket_points =None, pocket_points_radius=0, modify=False, files_to_modify = ['dist_duck.rst', 'dist_md.rst']):
     prot_atom = find_protein_atom(system_pmd, interaction)
