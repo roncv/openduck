@@ -42,6 +42,7 @@ def args_sanitation(parser, modes):
                 if 'force_constant_eq' in input_arguments: args.force_constant_eq =  float(input_arguments['force_constant_eq'])
                 if 'wqb_threshold' in input_arguments: args.wqb_threshold = float(input_arguments['wqb_threshold'])
                 if 'keep_all_files' in input_arguments: args.keep_all_files = bool(input_arguments['keep_all_files'])
+                if 'HMR' in input_arguments: args.HMR = bool(input_arguments['HMR'])
             else:
                 modes.choices['openmm-full-protocol'].error('You need to specify at least "ligand_mol", "receptor_pdb" and "interaction" in the yaml file.')
         elif (args.ligand is None or args.interaction is None or args.receptor is None):
@@ -100,6 +101,8 @@ def args_sanitation(parser, modes):
                 if 'gpu_id' in input_arguments: args.gpu_id =  str(input_arguments['gpu_id'])
                 if 'force_constant_eq' in input_arguments: args.force_constant_eq =  float(input_arguments['force_constant_eq'])
                 if 'keep_all_files' in input_arguments: args.keep_all_files = bool(input_arguments['keep_all_files'])
+                if 'HMR' in input_arguments: args.HMR = bool(input_arguments['HMR'])
+
             else:
                 modes.choices['openmm-prepare'].error('You need to specify at least "ligand_mol", "receptor_pdb" and "interaction" in the yaml file.')
         elif (args.ligand is None or args.interaction is None or args.receptor is None):
@@ -263,6 +266,7 @@ def parse_input():
     openmm_prepeq.add_argument('--do-equilibrate', action='store_true', help='Perform equilibration after preparing system.')
     openmm_prepeq.add_argument('-F', '--force-constant-eq', type=float, default = 1, help='Force constant for equilibration')
     openmm_prepeq.add_argument('-g', '--gpu-id', type=int, default=None, help='GPU ID; if not specified, runs on CPU only.')
+    openmm_prepeq.add_argument('-H','--HMR', action='store_true', help ='Perform Hydrogen Mass Repartition on the topology and use it for the input files.')
 
     #Arguments for OpenMM full-protocol
     full = modes.add_parser('openmm-full-protocol', help='OpenDUck full OpenMM protocol.', description='Full dynamic undocking protocol in OpenMM. The ligand, receptor and solvation box are parameterized with the specified parameters. If specified, the receptor is reduced to a chunked pocket. After equilibration, serial iterations of MD and SMD are performed until the WQB or max_cycles threshold is reached.')
@@ -287,6 +291,7 @@ def parse_input():
     prep.add_argument('-water','--waters-to-retain', default='waters_to_retain.pdb', type=str, help='PDB file containing structural water molecules to retain during simulations. Default is waters_to_retain.pdb.')
     prep.add_argument('-cf','--custom-forcefield', default=None, type=str, help='Custom forcefield (in Open Force Field XML format) to parameterize e.g. a cofactor or unnatural amino acid present in the PDB file included under --receptor. Will be used in addition to the forcefields specified by --small-molecule-forcefield and --protein-forcefield.')
     prep.add_argument('-fl','--fix-ligand', action='store_true', help='Some simple fixes for the ligand: ensure tetravalent nitrogens have the right charge assigned and add missing hydrogen atoms.')
+    prep.add_argument('-H','--HMR', action='store_true', help ='Perform Hydrogen Mass Repartition on the topology and run at dt=0.04 ps.')
     prod = full.add_argument_group('MD/SMD production arguments')
     prod.add_argument('-F', '--force-constant-eq', type=float, default = 1, help='Force constant for equilibration.')
     prod.add_argument('-n', '--smd-cycles', type=int, default = 20, help='Number of MD/SMD cycles to perform.')
@@ -294,6 +299,8 @@ def parse_input():
     prod.add_argument('-W', '--wqb-threshold', type=float, default=None, help='Minimum WQB threshold; if not reached after each SMD cycle, further simulations will be terminated. If not set (default), all SMD cycles will be run.')
     prod.add_argument('-v', '--init-velocities', type=float, default=0.00001, help='Set initial velocities when heating.')
     prod.add_argument('-d', '--init-distance', type=float, default=2.5, help='Set initial hydrogen bond distance for SMD in Angstroms. Default = 2.5 A.')
+
+
 
     #Arguments for OpenMM form equilibrated system
     equil = modes.add_parser('openmm-from-equilibrated', help='OpenDUck OpenMM protocol starting from a pre-equilibrated system.', description='Dynamic undocking starting from a pre-equilibrated system. A chunk file from an equilibrated protein-ligand complex will be taken as input. After identifing the main interaction, serial iterations of MD and SMD are performed until the WQB or max_cycles threshold is reached.')
@@ -399,7 +406,7 @@ def parse_input():
 
     return args, parser
 
-def duck_smd_runs(input_checkpoint, pickle, num_runs, md_len, gpu_id, start_dist, init_velocity, save_dir, wqb_threshold=None, clean=False):
+def duck_smd_runs(input_checkpoint, pickle, num_runs, md_len, gpu_id, start_dist, init_velocity, save_dir, wqb_threshold=None, clean=False, hmr=False):
     """
     Run molecular dynamics and steered molecular dynamics simulations on a system specified by an input checkpoint and a pickle file.
 
@@ -444,6 +451,8 @@ def duck_smd_runs(input_checkpoint, pickle, num_runs, md_len, gpu_id, start_dist
     # Now do the MD
     # remember start_dist
     if not Path(save_dir).exists(): save_dir.mkdir()
+    dt = 0.002
+    if hmr: dt=0.004
     for i in range(num_runs):
         if i == 0:
             md_start = str(input_checkpoint)
@@ -459,6 +468,7 @@ def duck_smd_runs(input_checkpoint, pickle, num_runs, md_len, gpu_id, start_dist
             dcd_out_file=str(Path(save_dir, "md_" + str(i) + ".dcd")),
             md_len=md_len,
             gpu_id=gpu_id,
+            dt=dt
         )
         # Open the file and check that the potential is stable and negative
         if not check_if_equlibrated(log_file, 3):
@@ -477,6 +487,7 @@ def duck_smd_runs(input_checkpoint, pickle, num_runs, md_len, gpu_id, start_dist
             start_dist,
             init_velocity=init_velocity,
             gpu_id=gpu_id,
+            hmr=hmr
         )
         #check if wqb is higher or lower than threshold to continue
         wqb, data, min_abs_work = get_Wqb_value(str(Path(save_dir, "smd_" + str(i) + "_300.dat")), mode='openmm')
@@ -632,7 +643,8 @@ def do_full_openMM_protocol(args):
                 init_velocity=args.init_velocities,
                 save_dir=save_dir,
                 wqb_threshold=args.wqb_threshold,
-                clean=not args.keep_all_files)
+                clean=not args.keep_all_files,
+                hmr=args.HMR)
 
 def do_openMM_from_equil(args):
     '''
@@ -789,7 +801,7 @@ def do_OpenMM_preparation(args):
     # prepare system
     prepare_system(args.ligand, chunked_file, forcefield_str=f'{args.protein_forcefield}.xml', water_ff_str = f'{args.water_model}',
             small_molecule_ff=args.small_molecule_forcefield, waters_to_retain=args.waters_to_retain, custom_forcefield=args.custom_forcefield,
-            box_buffer_distance = args.solvent_buffer_distance, ionicStrength = args.ionic_strength, fix_ligand_file=args.fix_ligand, clean_up=not args.keep_all_files)
+            box_buffer_distance = args.solvent_buffer_distance, ionicStrength = args.ionic_strength, fix_ligand_file=args.fix_ligand, clean_up=not args.keep_all_files, hmr=args.HMR)
     results = find_interaction(args.interaction, args.receptor)
     with open('complex_system.pickle', 'rb') as f:
         p = pickle.load(f) + results
@@ -800,7 +812,7 @@ def do_OpenMM_preparation(args):
     # Equlibration
     print(results)
     if args.do_equilibrate:
-        do_equlibrate(force_constant_equilibrate=args.force_constant_eq, gpu_id=args.gpu_id, keyInteraction=results, clean=not args.keep_all_files)
+        do_equlibrate(force_constant_equilibrate=args.force_constant_eq, gpu_id=args.gpu_id, keyInteraction=results, clean=not args.keep_all_files, hmr=args.HMR)
         if not check_if_equlibrated("density.csv", 1):
             raise EquilibrationError("System is not equilibrated.") # Does this exist?
 
