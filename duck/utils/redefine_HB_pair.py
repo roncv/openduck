@@ -72,10 +72,6 @@ def find_and_modify_HB_interaction(system_pmd, interaction, ligand_name, distanc
     if args.modify: modify_DUck_HB_atom_ids(prot_atom, good_lig_atom[0], files_to_mod = files_to_modify, backup=True)
     return good_lig_atom
 
-            
-            
-
-
 if __name__=='__main__':
     
     parser = argparse.ArgumentParser(description='Helper tool to redefine the hydrogen bond ligand atom and modify the amber inputs for DUck.')
@@ -83,10 +79,11 @@ if __name__=='__main__':
     parser.add_argument('--ligand-name', '-n', type=str, default='UNL', help='Ligand residue name in the pdb. Default: UNL')
     parser.add_argument('--interaction', '-i', type=str, required=True, help='Interaction string of the protein atom')
     parser.add_argument('--ligand-hb-elements', '-e', default=[7,8], type=int, nargs='+', help='Control which elements are accepted in the ligand to define the steering interaction. Specify using the atomic number separated with a space. Default is 7 and 8 (nitrogen and oxygen)')
-    parser.add_argument('--distance-cutoff', '-d', default=3.5, type=float, help='Redefine the minimum distance needed to chose the ligand interacting atom.')
+    parser.add_argument('--hb-distance-cutoff', '-d', default=3.5, type=float, help='Redefine the minimum distance needed to chose the ligand interacting atom.')
     parser.add_argument('--pocket-points', '-c', default=None, type=str, help='Coordinates of the points defining the allowed area of interacting ligand atoms in sdf, pdb or pharmacofore (ph4) format.')
     parser.add_argument('--pocket-points-radius', '-r', default=1, type=float, help='Tolerance radius of the pocket points to allow the interacting ligand atom.')
     parser.add_argument('--modify', '-m', default=False, action='store_true', help='Toggle to modify the amber input files with the new atom ID.')
+    parser.add_argument('--exclude', '-e', type=False, action='store_true', help='Reverse pocket-point functionality. When flagged pocket-points define an exclusion where the interacting ligand atom cannot be.')
     parser.add_argument('--pattern', '-p', type=str, default='.', help='Wildcard pattern to find folders with DUck data.')
 
     args = parser.parse_args()
