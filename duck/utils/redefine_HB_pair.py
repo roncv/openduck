@@ -83,7 +83,7 @@ if __name__=='__main__':
     parser.add_argument('--pocket-points', '-c', default=None, type=str, help='Coordinates of the points defining the allowed area of interacting ligand atoms in sdf, pdb or pharmacofore (ph4) format.')
     parser.add_argument('--pocket-points-radius', '-r', default=1, type=float, help='Tolerance radius of the pocket points to allow the interacting ligand atom.')
     parser.add_argument('--modify', '-m', default=False, action='store_true', help='Toggle to modify the amber input files with the new atom ID.')
-    parser.add_argument('--exclude', '-e', type=False, action='store_true', help='Reverse pocket-point functionality. When flagged pocket-points define an exclusion where the interacting ligand atom cannot be.')
+    parser.add_argument('--exclude', '-x', default=False, action='store_true', help='Reverse pocket-point functionality. When flagged pocket-points define an exclusion where the interacting ligand atom cannot be.')
     parser.add_argument('--pattern', '-p', type=str, default='.', help='Wildcard pattern to find folders with DUck data.')
 
     args = parser.parse_args()
