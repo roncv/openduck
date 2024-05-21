@@ -85,11 +85,13 @@ The full protocol executes the following steps:
 ```{bash}
 $ openduck openmm-full-protocol -h
 
-usage: openduck openmm-full-protocol [-h] [-y YAML_INPUT] [-l LIGAND] [-i INTERACTION] [-r RECEPTOR] [-g GPU_ID]
-                                     [--do-chunk] [-c CUTOFF] [-b] [-f {SMIRNOFF,GAFF2}] [-w {tip3p,spce}]
+usage: openduck openmm-full-protocol [-h] [-y YAML_INPUT] [-l LIGAND] [-i INTERACTION]
+                                     [-r RECEPTOR] [-g GPU_ID] [--keep-all-files] [--do-chunk]
+                                     [-c CUTOFF] [-b] [-f {SMIRNOFF,GAFF2}] [-w {tip3p,spce}]
                                      [-ff {amber99sb,amber14-all}] [-ion IONIC_STRENGTH]
-                                     [-s SOLVENT_BUFFER_DISTANCE] [-water WATERS_TO_RETAIN] [-fl]
-                                     [-F FORCE_CONSTANT_EQ] [-n SMD_CYCLES] [-m MD_LENGTH] [-W WQB_THRESHOLD]
+                                     [-s SOLVENT_BUFFER_DISTANCE] [-water WATERS_TO_RETAIN]
+                                     [-cf CUSTOM_FORCEFIELD] [-fl] [-H] [-F FORCE_CONSTANT_EQ]
+                                     [-n SMD_CYCLES] [-m MD_LENGTH] [-W WQB_THRESHOLD]
                                      [-v INIT_VELOCITIES] [-d INIT_DISTANCE]
 
 Full dynamic undocking protocol in OpenMM. The ligand, receptor and solvation box are parameterized with the
@@ -135,8 +137,14 @@ Parameterization arguments:
   -water WATERS_TO_RETAIN, --waters-to-retain WATERS_TO_RETAIN
                         PDB file containing structural water molecules to retain during
                         simulations. Default is waters_to_retain.pdb.
+  -cf CUSTOM_FORCEFIELD, --custom-forcefield CUSTOM_FORCEFIELD
+                        Custom forcefield (in Open Force Field XML format) to parameterize e.g. a
+                        cofactor or unnatural amino acid present in the PDB file included under
+                        --receptor. Will be used in addition to the forcefields specified by
+                        --small-molecule-forcefield and --protein-forcefield.
   -fl, --fix-ligand     Some simple fixes for the ligand: ensure tetravalent nitrogens have the
                         right charge assigned and add missing hydrogen atoms.
+  -H, --HMR             Perform Hydrogen Mass Repartition on the topology and run at dt=0.04 ps.
 
 MD/SMD production arguments:
   -F FORCE_CONSTANT_EQ, --force-constant-eq FORCE_CONSTANT_EQ
@@ -371,9 +379,23 @@ Parameterization arguments:
   -water WATERS_TO_RETAIN, --waters-to-retain WATERS_TO_RETAIN
                         PDB file containing structural water molecules to retain during
                         simulations. Default is waters_to_retain.pdb.
+  -cf CUSTOM_FORCEFIELD, --custom-forcefield CUSTOM_FORCEFIELD
+                        Custom forcefield (in Open Force Field XML format) to parameterize e.g. a
+                        cofactor or unnatural amino acid present in the PDB file included under
+                        --receptor. Will be used in addition to the forcefields specified by --small-
+                        molecule-forcefield and --protein-forcefield.
   --seed SEED           Specify seed for AMBER inputs.
   -fl, --fix-ligand     Some simple fixes for the ligand: ensure tetravalent nitrogens have the
                         right charge assigned and add missing hydrogen atoms.
+  --water-steering      Enable water steering, which will use the waters-to-retain as interaction
+                        vector to steer the ligand.
+  --waters-to-restrain WATERS_TO_RESTRAIN
+                        Number (and order) of waters to restraint. Default is None when executing in
+                        the normal mode and 1 when using water-steering.
+  -e LIGAND_HB_ELEMENTS [LIGAND_HB_ELEMENTS ...], --ligand-hb-elements LIGAND_HB_ELEMENTS [LIGAND_HB_ELEMENTS ...]
+                        Control which elements are accepted in the ligand to define the steering
+                        interaction. Specify using the atomic number separated with a space. Default is
+                        7 and 8 (nitrogen and oxygen)
 
 Batch argments:
   -B, --batch           Enable batch processing for multi-ligand SDF.

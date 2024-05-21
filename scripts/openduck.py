@@ -42,6 +42,7 @@ def args_sanitation(parser, modes):
                 if 'force_constant_eq' in input_arguments: args.force_constant_eq =  float(input_arguments['force_constant_eq'])
                 if 'wqb_threshold' in input_arguments: args.wqb_threshold = float(input_arguments['wqb_threshold'])
                 if 'keep_all_files' in input_arguments: args.keep_all_files = bool(input_arguments['keep_all_files'])
+                if 'HMR' in input_arguments: args.HMR = bool(input_arguments['HMR'])
             else:
                 modes.choices['openmm-full-protocol'].error('You need to specify at least "ligand_mol", "receptor_pdb" and "interaction" in the yaml file.')
         elif (args.ligand is None or args.interaction is None or args.receptor is None):
@@ -100,6 +101,8 @@ def args_sanitation(parser, modes):
                 if 'gpu_id' in input_arguments: args.gpu_id =  str(input_arguments['gpu_id'])
                 if 'force_constant_eq' in input_arguments: args.force_constant_eq =  float(input_arguments['force_constant_eq'])
                 if 'keep_all_files' in input_arguments: args.keep_all_files = bool(input_arguments['keep_all_files'])
+                if 'HMR' in input_arguments: args.HMR = bool(input_arguments['HMR'])
+
             else:
                 modes.choices['openmm-prepare'].error('You need to specify at least "ligand_mol", "receptor_pdb" and "interaction" in the yaml file.')
         elif (args.ligand is None or args.interaction is None or args.receptor is None):
@@ -214,6 +217,20 @@ def args_sanitation(parser, modes):
             # all good
             pass
         pass
+    elif args.mode == 'prepare-cofactor':
+        if (args.yaml_input is None) and (args.mol2 is None or args.frcmod is None or args.output is None):
+            modes.choices['chunk'].error('The input needs to be either the input yaml or specified on the command line (mol2, frcmod, outputfile).')
+        elif args.yaml_input:
+            input_arguments = yaml.load(open(args.yaml_input), Loader=yaml.FullLoader)
+            if all(item in list(input_arguments.keys()) for item in ['mol2', 'frcmod', 'output']):
+                args.mol2 = str(input_arguments['mol2'])
+                args.frcmod = str(input_arguments['frcmod'])
+                args.output = str(input_arguments['output'])
+            else:
+                modes.choices['chunk'].error('You need to specify at least "mol2, "frcmod" and "output" in the yaml file.')
+        else:
+            # all good
+            pass
     return args
 
 def parse_input():
@@ -249,6 +266,7 @@ def parse_input():
     openmm_prepeq.add_argument('--do-equilibrate', action='store_true', help='Perform equilibration after preparing system.')
     openmm_prepeq.add_argument('-F', '--force-constant-eq', type=float, default = 1, help='Force constant for equilibration')
     openmm_prepeq.add_argument('-g', '--gpu-id', type=int, default=None, help='GPU ID; if not specified, runs on CPU only.')
+    openmm_prepeq.add_argument('-H','--HMR', action='store_true', help ='Perform Hydrogen Mass Repartition on the topology and use it for the input files.')
 
     #Arguments for OpenMM full-protocol
     full = modes.add_parser('openmm-full-protocol', help='OpenDUck full OpenMM protocol.', description='Full dynamic undocking protocol in OpenMM. The ligand, receptor and solvation box are parameterized with the specified parameters. If specified, the receptor is reduced to a chunked pocket. After equilibration, serial iterations of MD and SMD are performed until the WQB or max_cycles threshold is reached.')
@@ -273,6 +291,7 @@ def parse_input():
     prep.add_argument('-water','--waters-to-retain', default='waters_to_retain.pdb', type=str, help='PDB file containing structural water molecules to retain during simulations. Default is waters_to_retain.pdb.')
     prep.add_argument('-cf','--custom-forcefield', default=None, type=str, help='Custom forcefield (in Open Force Field XML format) to parameterize e.g. a cofactor or unnatural amino acid present in the PDB file included under --receptor. Will be used in addition to the forcefields specified by --small-molecule-forcefield and --protein-forcefield.')
     prep.add_argument('-fl','--fix-ligand', action='store_true', help='Some simple fixes for the ligand: ensure tetravalent nitrogens have the right charge assigned and add missing hydrogen atoms.')
+    prep.add_argument('-H','--HMR', action='store_true', help ='Perform Hydrogen Mass Repartition on the topology and run at dt=0.04 ps.')
     prod = full.add_argument_group('MD/SMD production arguments')
     prod.add_argument('-F', '--force-constant-eq', type=float, default = 1, help='Force constant for equilibration.')
     prod.add_argument('-n', '--smd-cycles', type=int, default = 20, help='Number of MD/SMD cycles to perform.')
@@ -280,6 +299,8 @@ def parse_input():
     prod.add_argument('-W', '--wqb-threshold', type=float, default=None, help='Minimum WQB threshold; if not reached after each SMD cycle, further simulations will be terminated. If not set (default), all SMD cycles will be run.')
     prod.add_argument('-v', '--init-velocities', type=float, default=0.00001, help='Set initial velocities when heating.')
     prod.add_argument('-d', '--init-distance', type=float, default=2.5, help='Set initial hydrogen bond distance for SMD in Angstroms. Default = 2.5 A.')
+
+
 
     #Arguments for OpenMM form equilibrated system
     equil = modes.add_parser('openmm-from-equilibrated', help='OpenDUck OpenMM protocol starting from a pre-equilibrated system.', description='Dynamic undocking starting from a pre-equilibrated system. A chunk file from an equilibrated protein-ligand complex will be taken as input. After identifing the main interaction, serial iterations of MD and SMD are performed until the WQB or max_cycles threshold is reached.')
@@ -373,11 +394,19 @@ def parse_input():
     chunk.add_argument('-o', '--output', type=str, default='protein_out.pdb',help='Output format for the chunked protein receptor.')
     chunk.add_argument('--keep-all-files', default=False, action='store_true', help='Disable cleaning up intermediate files during preparation.')
 
+    #Arguments for cofactor parameters preparation
+    cofactor = modes.add_parser('prepare-cofactor', help='Create the parameters file for a cofactor to input as custom forcefield.', description='To perform simulations with cofactors new non-standard parameters need to be provided. OpenMM accepts parameters in xml format, where charges and forcefield parameters are stored, however Amber stores charges and parameters separatedly. This is a helper program to create an xml parameters file.')
+    cofactor.set_defaults(mode='prepare-cofactor')
+    cofactor.add_argument('-y', '--yaml-input', type=str, default=None, help='Input yaml file with all the arguments for the cofactor parameter file preparation.')
+    cofactor.add_argument('-m', '--mol2',type=str, default=None, help='Mol2 with the partial charges of the cofactor')
+    cofactor.add_argument('-f', '--frcmod',type=str, default=None, help='frcmod of the complete set of parameters for your molecule. Reminder: use the -a Y flag in parmchk2.')
+    cofactor.add_argument('-o', '--output',type=str, default=None, help='Output parameters file in xml format.')
+
     args = args_sanitation(parser, modes)
 
     return args, parser
 
-def duck_smd_runs(input_checkpoint, pickle, num_runs, md_len, gpu_id, start_dist, init_velocity, save_dir, wqb_threshold=None, clean=False):
+def duck_smd_runs(input_checkpoint, pickle, num_runs, md_len, gpu_id, start_dist, init_velocity, save_dir, wqb_threshold=None, clean=False, hmr=False):
     """
     Run molecular dynamics and steered molecular dynamics simulations on a system specified by an input checkpoint and a pickle file.
 
@@ -422,6 +451,8 @@ def duck_smd_runs(input_checkpoint, pickle, num_runs, md_len, gpu_id, start_dist
     # Now do the MD
     # remember start_dist
     if not Path(save_dir).exists(): save_dir.mkdir()
+    dt = 0.002
+    if hmr: dt=0.004
     for i in range(num_runs):
         if i == 0:
             md_start = str(input_checkpoint)
@@ -437,6 +468,7 @@ def duck_smd_runs(input_checkpoint, pickle, num_runs, md_len, gpu_id, start_dist
             dcd_out_file=str(Path(save_dir, "md_" + str(i) + ".dcd")),
             md_len=md_len,
             gpu_id=gpu_id,
+            dt=dt
         )
         # Open the file and check that the potential is stable and negative
         if not check_if_equlibrated(log_file, 3):
@@ -455,6 +487,7 @@ def duck_smd_runs(input_checkpoint, pickle, num_runs, md_len, gpu_id, start_dist
             start_dist,
             init_velocity=init_velocity,
             gpu_id=gpu_id,
+            hmr=hmr
         )
         #check if wqb is higher or lower than threshold to continue
         wqb, data, min_abs_work = get_Wqb_value(str(Path(save_dir, "smd_" + str(i) + "_300.dat")), mode='openmm')
@@ -563,6 +596,7 @@ def AMBER_prepare_ligand_in_folder(ligand_string, lig_indx, protein, chunk, inte
 
     with open('preparation.out', 'w') as o:
         with redirect_stdout(o):
+
             # Copying files to ligand foldef; ligand and prot
             write_string_to_file(string=ligand_string, file=f'lig_{lig_indx}.mol')
             shutil.copyfile(f'{pwd}/{protein}', f'./{protein}', follow_symlinks=True)
@@ -575,7 +609,7 @@ def AMBER_prepare_ligand_in_folder(ligand_string, lig_indx, protein, chunk, inte
                                   small_molecule_forcefield=small_molecule_forcefield, water_ff_str=f'{water_model}',
                                   forcefield_str=f'{forcefield}.xml', ionic_strength = ion_strength,
                                   box_buffer_distance = box_buffer_distance, waters_to_retain=f"{waters_to_retain}",
-                                  custom_forcefield=custom_forcefield, seed=seed, fix_ligand_file=fix_ligand, clean_up=clean_up,
+                                  custom_forcefield=f'{pwd}/{custom_forcefield}', seed=seed, fix_ligand_file=fix_ligand, clean_up=clean_up,
                                   water_steering=water_steering, waters_to_restrain=waters_to_restrain, lig_HB_elements=ligands_HB_elements)
     Queue_templates().copy_getWqbValues_script()
     return(f'{prefix}_{lig_indx} prepared correctly')
@@ -609,7 +643,8 @@ def do_full_openMM_protocol(args):
                 init_velocity=args.init_velocities,
                 save_dir=save_dir,
                 wqb_threshold=args.wqb_threshold,
-                clean=not args.keep_all_files)
+                clean=not args.keep_all_files,
+                hmr=args.HMR)
 
 def do_openMM_from_equil(args):
     '''
@@ -766,7 +801,7 @@ def do_OpenMM_preparation(args):
     # prepare system
     prepare_system(args.ligand, chunked_file, forcefield_str=f'{args.protein_forcefield}.xml', water_ff_str = f'{args.water_model}',
             small_molecule_ff=args.small_molecule_forcefield, waters_to_retain=args.waters_to_retain, custom_forcefield=args.custom_forcefield,
-            box_buffer_distance = args.solvent_buffer_distance, ionicStrength = args.ionic_strength, fix_ligand_file=args.fix_ligand, clean_up=not args.keep_all_files)
+            box_buffer_distance = args.solvent_buffer_distance, ionicStrength = args.ionic_strength, fix_ligand_file=args.fix_ligand, clean_up=not args.keep_all_files, hmr=args.HMR)
     results = find_interaction(args.interaction, args.receptor)
     with open('complex_system.pickle', 'rb') as f:
         p = pickle.load(f) + results
@@ -777,7 +812,7 @@ def do_OpenMM_preparation(args):
     # Equlibration
     print(results)
     if args.do_equilibrate:
-        do_equlibrate(force_constant_equilibrate=args.force_constant_eq, gpu_id=args.gpu_id, keyInteraction=results, clean=not args.keep_all_files)
+        do_equlibrate(force_constant_equilibrate=args.force_constant_eq, gpu_id=args.gpu_id, keyInteraction=results, clean=not args.keep_all_files, hmr=args.HMR)
         if not check_if_equlibrated("density.csv", 1):
             raise EquilibrationError("System is not equilibrated.") # Does this exist?
 
@@ -801,6 +836,9 @@ def main():
     elif args.mode == 'Chunk':
         from duck.steps.chunk import duck_chunk
         duck_chunk(args.receptor,args.ligand,args.interaction,args.cutoff,output_name=args.output, ignore_buffers=args.ignore_buffers, keep_all_files=args.keep_all_files)
+    elif args.mode == 'prepare-cofactor':
+        from duck.utils.frcmod_mol2_to_xml import frcmod_mol2_to_xml
+        frcmod_mol2_to_xml(frcmod = args.frcmod, mol2 = args.mol2, out_xml= args.output)
     else:
         parser.print_help()
 if __name__ == '__main__':
