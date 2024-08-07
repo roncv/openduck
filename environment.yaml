@@ -3,7 +3,7 @@ channels:
   - conda-forge
   - defaults
 dependencies:
-  - python=3.9
+  # - python=3.9
   - numpy=1.23.5
   - yank=0.25.2
   - pdbfixer=1.7
