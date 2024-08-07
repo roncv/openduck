@@ -16,7 +16,7 @@ More details can be found in the original dynamic undocking publication:
 
 We recommend you install OpenDUck into a fresh Conda environment.
 ```{bash}
-$ git clone git@github.com:CBDD/openduck.git
+$ git clone https://github.com/roncv/openduck.git
 $ cd openduck
 $ conda env create -f environment.yaml
 $ conda activate openduck
