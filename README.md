@@ -12,7 +12,20 @@ More details can be found in the original dynamic undocking publication:
 
 ## Installation
 
-### Conda (update)
+### Conda (recommended) (TODO: environment.yaml should be updated to build the following...)
+
+We recommend you install OpenDUck into a fresh Conda environment.
+```{bash}
+$ git clone https://github.com/roncv/openduck.git
+$ conda create -n openduck -c conda-forge python=3.11
+$ conda install -c conda-forge numpy yank pdbfixer openff-toolkit parmed cudatoolkit openmm openmmforcefields ambertools seaborn rdkit
+$ conda activate openduck
+$ pip install molparse
+$ cd openduck
+$ python setup.py install
+```
+
+### Conda (legacy)
 
 We recommend you install OpenDUck into a fresh Conda environment.
 ```{bash}
